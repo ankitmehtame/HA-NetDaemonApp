@@ -1,0 +1,21 @@
+{
+  "name": "NetDaemon App-development",
+  "dockerFile": "./Dockerfile",
+  "postCreateCommand": "dotnet restore **/*.csproj",
+  "settings": {
+    "terminal.integrated.shell.linux": "/bin/bash",
+    "terminal.integrated.fontSize": 10
+  },
+  "extensions": [
+    "ms-dotnettools.csdevkit",
+    "ms-dotnettools.csharp",
+    "formulahendry.dotnet-test-explorer",
+    "formulahendry.dotnet",
+    "streetsidesoftware.code-spell-checker",
+    "mhutchie.git-graph",
+    "eamodio.gitlens",
+    "ms-dotnettools.vscodeintellicode-csharp",
+    "jmrog.vscode-nuget-package-manager",
+    "gruntfuggly.todo-tree"
+  ]
+}

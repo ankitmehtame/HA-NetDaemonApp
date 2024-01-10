@@ -1,0 +1,9 @@
+obj
+bin
+appsettings.Development.json
+.vs
+*.gen
+.idea
+out
+#appsettings.json
+#HomeAssistantGenerated.cs
