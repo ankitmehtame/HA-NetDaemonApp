@@ -5,5 +5,6 @@ appsettings.Development.json
 *.gen
 .idea
 out
+**/.DS_Store
 #appsettings.json
 #HomeAssistantGenerated.cs

@@ -12,9 +12,6 @@ using NetDaemon.Runtime;
 try
 {
     await Host.CreateDefaultBuilder(args)
-    // #if DEBUG
-    //     .ConfigureAppConfiguration(x => x.AddJsonAppConfig("appsettings.debug.json"))
-    // #endif
         .UseNetDaemonAppSettings()
         .UseNetDaemonDefaultLogging()
         .UseNetDaemonRuntime()
