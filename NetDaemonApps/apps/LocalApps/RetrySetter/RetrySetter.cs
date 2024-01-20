@@ -6,6 +6,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using NetDaemon.HassModel.Entities;
+using NetDaemonApps.Logging;
 using Nito.AsyncEx;
 
 namespace LocalApps.RetrySetter;
@@ -13,7 +14,8 @@ namespace LocalApps.RetrySetter;
 [NetDaemonApp]
 public class RetrySetterApp
 {
-    private const string VERSION = "0.8";
+    private const string VERSION = "0.8.1";
+    private const string HA_LOGGER_NAME = "HA.NetDaemon.RetrySetter.RetrySetterApp";
     private const string ON = "on";
     private const string OFF = "off";
     private readonly ILogger<Runner> runnerLogger;
@@ -49,6 +51,7 @@ public class RetrySetterApp
         if (!genericEvent.DataElement.Value.TryGetProperty("entityId", out var entityIdElement))
         {
             logger.LogWarning("Unable to parse entityId from event {event}", genericEvent);
+            LogToHA(HALogLevel.Warning, string.Format("Unable to parse entityId from event {0}", genericEvent));
             return [];
         }
         string[] entityIds;
@@ -73,11 +76,13 @@ public class RetrySetterApp
         else
         {
             logger.LogWarning("Unable to parse entityId from event {event}", genericEvent);
+            LogToHA(HALogLevel.Warning, string.Format("Unable to parse entityId from event {0}", genericEvent));
             return [];
         }
         if (!genericEvent.DataElement.Value.TryGetProperty("value", out var valueElement))
         {
             logger.LogWarning("Unable to parse value from event {event}", genericEvent);
+            LogToHA(HALogLevel.Warning, string.Format("Unable to parse value from event {0}", genericEvent));
             return [];
         }
         var value = valueElement.GetString();
@@ -122,6 +127,17 @@ public class RetrySetterApp
         ImmutableInterlocked.TryRemove(ref runners, entityId, out var _);
     }
 
+    private bool LogToHA(string logLevel, string message)
+    {
+        return LogToHA(ha, logger, logLevel, message);
+    }
+
+    private static bool LogToHA(IHaContext haContext, ILogger logger, string logLevel, string message)
+    {
+        HALogData logData = new(Level: logLevel, Logger: HA_LOGGER_NAME, Message: message);
+        return haContext.LogToHA(logger, logData);
+    }
+
     private class Runner(long requestId, string entityId, string value, DateTime triggeredAt, CancellationTokenSource cancellationTokenSource, Action<string> postRun, IHaContext haContext, ILogger<Runner> logger, int totalAttempts = 10, int minimumRetryIntervalMsec = 1000)
     {
         private static readonly TimeSpan PollingDelay = TimeSpan.FromMilliseconds(200);
@@ -160,6 +176,7 @@ public class RetrySetterApp
                         var timeSpent = Stopwatch.GetElapsedTime(startTime);
                         logger.LogDebug("[{requestId}] - Waited for {delay} ms for attempt {attemptNum}", requestId, supposedDelay, attemptNumber);
                         logger.LogInformation("[{requestId}] - Completed. Light {entityId} set to {value} on attempt {attemptNum} after {timeSpent} ms", requestId, entityId, value, attemptNumber, timeSpent.TotalMilliseconds);
+                        LogToHA(HALogLevel.Info, string.Format("Light {0} set to {1} on attempt {2} after {3} ms", entityId, value, attemptNumber, timeSpent.TotalMilliseconds));
                         return true;
                     }
 
@@ -167,12 +184,14 @@ public class RetrySetterApp
                 }
                 if (!cancellationToken.IsCancellationRequested)
                 {
-                    logger.LogWarning("[{requestId}] - Failed. Could not update light {entityId} to {value} after all {totalAttempts} attempts", requestId, entityId, value, totalAttempts);
+                    logger.LogError("[{requestId}] - Failed. Could not update light {entityId} to {value} after all {totalAttempts} attempts", requestId, entityId, value, totalAttempts);
+                    LogToHA(HALogLevel.Error, string.Format("Could not update light {0} to {1} after {2} attempts", entityId, value, totalAttempts));
                 }
             }
             catch (Exception ex)
             {
-                logger.LogWarning(ex, "[{requestId}] - Failed. Unexpected error in runner for {entityId} setting to {value} during attempt {attemptNumber}", requestId, entityId, value, attemptNumber);
+                logger.LogError(ex, "[{requestId}] - Failed. Unexpected error in runner for {entityId} setting to {value} during attempt {attemptNumber}", requestId, entityId, value, attemptNumber);
+                LogToHA(HALogLevel.Error, string.Format("Unexpected error in runner for {0} setting to {1} during attempt {2} - {3}", entityId, value, attemptNumber, ex));
             }
             finally
             {
@@ -213,6 +232,7 @@ public class RetrySetterApp
             catch (Exception ex)
             {
                 logger.LogWarning(ex, "[{requestId}] - Unable to set light {entityId} {serviceCall}", requestId, entityId, serviceCall);
+                LogToHA(HALogLevel.Warning, string.Format("Unable to set light {0} {1} - {2}", entityId, serviceCall, ex));
             }
         }
 
@@ -220,6 +240,11 @@ public class RetrySetterApp
         {
             var newState = haContext.Entity(entityId).State;
             return string.Equals(newState, value, StringComparison.OrdinalIgnoreCase);
+        }
+
+        private bool LogToHA(string logLevel, string message)
+        {
+            return RetrySetterApp.LogToHA(haContext, logger, logLevel, message);
         }
     }
 }
